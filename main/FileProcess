@@ -1,0 +1,123 @@
+package com.huawei.java.main;
+
+import java.io.*;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * @Author: LJ
+ * @Description: 读取文件工具类
+ */
+public class FileProcess {
+
+    //线上
+//    private final static String filePath = "/data";
+    //线下
+    private final static String filePath = "src/java/com/huawei/java/data";
+
+    /**
+     * 读取qos上限
+     * @return
+     */
+    public static int getQosConfig(){
+        File file = new File(filePath+"/config.ini");
+        String s = null;
+        try {
+            BufferedReader reader = new BufferedReader(new FileReader(file));
+            reader.readLine();
+            s = reader.readLine().split("=")[1];
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return Integer.valueOf(s);
+    }
+
+    /**
+     * 读取demand
+     * @return
+     */
+    public static List<String[]> getDemand(){
+        List<String[]> demand = new ArrayList<>();
+        File file = new File(filePath+"/demand.csv");
+        BufferedReader reader = null;
+        String strs = null;
+        try {
+            reader = new BufferedReader(new FileReader(file));
+            while((strs = reader.readLine())!=null) {
+                demand.add(strs.split(","));
+            }
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return demand;
+    }
+
+    /**
+     * 读取qos
+     * @return
+     */
+    public static List<String[]> getQos(){
+        List<String[]> qos = new ArrayList<>();
+        File file = new File(filePath+"/qos.csv");
+        BufferedReader reader = null;
+        String strs = null;
+        try {
+            reader = new BufferedReader(new FileReader(file));
+            while((strs = reader.readLine())!=null) {
+                qos.add(strs.split(","));
+            }
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return qos;
+    }
+
+    /**
+     * 读取site_bandwidth
+     * @return
+     */
+    public static List<String[]> getSiteBandwidth(){
+        List<String[]> siteBandwidth = new ArrayList<>();
+        File file = new File(filePath+"/site_bandwidth.csv");
+        BufferedReader reader = null;
+        String strs = null;
+        try {
+            reader = new BufferedReader(new FileReader(file));
+            while((strs = reader.readLine())!=null) {
+                siteBandwidth.add(strs.split(","));
+            }
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return siteBandwidth;
+    }
+
+    /**
+     * 写入文件
+     * @param write
+     * @param strs
+     * @param flag 1换行， 0不换行
+     */
+    public static void writeFile(BufferedWriter write, String strs, int flag){
+
+        try {
+            if (flag==1) write.write(strs+"\r\n");
+            else write.write(strs);
+            write.flush();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+}
