@@ -1,0 +1,128 @@
+package com.huawei.java.main;
+
+
+
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+
+/**
+ * @Author: LJ
+ * @Description: 对文件数据做简单处理
+ */
+public class DataProcess {
+
+    private final static List<String[]> demand = FileProcess.getDemand();////客户结点和需求
+    private final static List<String[]> siteBandwidth = FileProcess.getSiteBandwidth();//边缘结点的带宽上线
+
+
+    /**
+     * 每一个客户结点可以使用的边缘结点
+     * <客户结点名称， 边缘结点名称>
+     * @return
+     */
+    public static HashMap<String, HashSet<String>> getMN() {
+        int qosLimit = FileProcess.getQosConfig();
+        List<String[]> qos = FileProcess.getQos();
+        HashMap<String, HashSet<String>> MN = new HashMap<>();
+        for(int x=1; x<qos.get(0).length; x++){
+            HashSet<String> one = new HashSet<>();
+            for (int i=1; i<qos.size(); i++){
+                if (Integer.parseInt(qos.get(i)[x])>=qosLimit) continue;
+                one.add(qos.get(i)[0]);
+            }
+            MN.put(qos.get(0)[x], one);
+        }
+        return MN;
+    }
+
+    /**
+     * 每一个客户结点可以使用的边缘结点
+     * <边缘结点名称, 客户结点名称>
+     * @return
+     */
+    public static HashMap<String, HashSet<String>> getNM() {
+        int qosLimit = FileProcess.getQosConfig();
+        List<String[]> qos = FileProcess.getQos();
+        HashMap<String, HashSet<String>> NM = new HashMap<>();
+
+        for (int j=1; j<qos.size(); j++){
+            HashSet<String> one = new HashSet<>();
+            for (int i=1; i<qos.get(0).length; i++){
+                if (Integer.parseInt(qos.get(j)[i])>=qosLimit) continue;
+                one.add(qos.get(0)[i]);
+            }
+            NM.put(qos.get(j)[0], one);
+        }
+        return NM;
+    }
+
+
+    /**
+     * <名称，带宽>
+     * Hash每个边缘结点的初始带宽
+     * @return
+     */
+    public static HashMap<String, Integer> getsiteHasBandWidthMap(){
+
+        HashMap<String, Integer> siteHasBandWidthMap = new HashMap<>();
+
+        int N = siteBandwidth.size();//总节点数量
+
+        for (int j=1; j<N; j++){
+            String siteName = siteBandwidth.get(j)[0];
+            siteHasBandWidthMap.put(siteName, Integer.parseInt(siteBandwidth.get(j)[1]));
+        }
+
+        return siteHasBandWidthMap;
+    }
+
+
+    /**
+     * 得到每个结点可以满载的次数
+     * <边缘结点名称， 次数>
+     * @return
+     */
+    public static HashMap<String, Integer> getFullNum(){
+        HashMap<String, Integer> res = new HashMap<>();
+
+        int N = siteBandwidth.size();
+        int num = getNum();
+
+        for (int j=1; j<N; j++){
+            String siteName = siteBandwidth.get(j)[0];
+            res.put(siteName, num);
+        }
+        return res;
+    }
+
+    /**
+     * 某一个结点的最大满载数
+     * @return
+     */
+    public static int getNum(){
+        double x = (demand.size()-1) * 0.95;//这里注意向上取整
+        int num = (int) (demand.size()-1- Math.ceil(x));
+        return num;
+//        return demand.size()-1;
+    }
+
+
+    public static HashMap<Integer, String> getnToSiteName(){
+        HashMap<Integer, String> nTOSiteName = new HashMap<>();//所有边缘结点的名字对应的索引号
+        for(int j=1; j<siteBandwidth.size(); j++) nTOSiteName.put(j, siteBandwidth.get(j)[0]);
+        return nTOSiteName;
+    }
+
+    /**
+     * 获取demand
+     * @return
+     */
+    public static List<String[]> getDemand() {
+        return demand;
+    }
+
+
+
+
+}
