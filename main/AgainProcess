@@ -1,0 +1,249 @@
+package com.huawei.java.main;
+
+
+import java.util.*;
+
+/**
+ * @Author: LJ
+ * @Description: 在数据处理之后再处理
+ */
+public class AgainProcess {
+
+    private final static List<String[]> demand = DataProcess.getDemand();
+    private final static HashMap<String, HashSet<String>> MN = DataProcess.getMN();//M->N
+    private final static HashMap<String, HashSet<String>> NM = DataProcess.getNM();//N->M
+    private final static HashMap<String, Integer> fullNum = DataProcess.getFullNum();//使用名字来存
+
+    private final static HashMap<String, Integer> siteHasBandWidthMap = DataProcess.getsiteHasBandWidthMap();
+    private final static HashMap<Integer, String> nToSiteName = DataProcess.getnToSiteName();
+
+
+
+
+    /**
+     * 对每一个时刻结点满载的最大值排序
+     * 必须尽可能的一次性排完
+     * @return
+     */
+    public static HashMap<Integer, HashMap<String, HashMap<String, Integer>>> demandSiteMaxSort(List<HashMap<String, Integer>> bandWidthListMap){
+
+        HashMap<Integer, HashMap<String, HashMap<String, Integer>>> tSiteBandWrite = new HashMap<>();//[时刻， demand顺序，siteName]=值
+
+        int T = demand.size();//总时刻
+        List<Integer[]> sortSiteMaxSort = new ArrayList<>();
+        HashSet<Integer> demandZero = new HashSet<>();//记录那些时刻的demand全为0.
+        int M = demand.get(0).length;
+
+        int N = siteHasBandWidthMap.size();
+
+        for (int j=1; j<N; j++) {
+
+            String siteName = nToSiteName.get(j);
+
+            if (fullNum.get(siteName) == 0) continue;
+            List<Integer[]> res = new ArrayList<>();
+
+
+            List<HashMap<Integer, Integer>> demandNeedList = new ArrayList<>();
+            demandNeedList.add(new HashMap<>());//占位
+            for (int t = 1; t < T; t++) {
+                HashMap<Integer, Integer> demandMap = new HashMap<>();
+
+                if (demandZero.contains(t)){
+                    demandNeedList.add(demandMap);
+                    continue;
+                }
+
+                int provideAver = NM.get(siteName).size();//当前结点N可以提供的客户结点M
+                if (provideAver==0) continue;
+                //先每个边缘结点
+                Integer[] one  = provideSite(M, provideAver, t, j, siteName, bandWidthListMap, demandMap);
+
+                if (one[2]!=0){
+                    res.add(one);
+                    bandWidthListMap.get(t).put(siteName, one[2] + bandWidthListMap.get(t).get(siteName));
+                }
+                demandNeedList.add(demandMap);
+            }
+
+            sortSiteMaxN(res);
+            int Num = fullNum.get(siteName);
+//            int cishu = 0;
+//            if (res.size()>Num) cishu=Num;
+//            else cishu = res.size();
+            for (int q=0; q<Num; q++){
+                if (res.size()-1<q) break;
+                Integer[] site = res.get(q);
+                int qt = site[0];
+                String qsiteName = nToSiteName.get(site[1]);
+                int value = site[2];
+
+                int times = fullNum.get(qsiteName);
+                if (times==0) break;
+                fullNum.put(qsiteName, times-1);
+                sortSiteMaxSort.add(site);
+                changeDemand(qt, qsiteName, value, tSiteBandWrite, demandNeedList.get(qt));
+                bandWidthListMap.get(qt).put(qsiteName, bandWidthListMap.get(qt).get(qsiteName)-value);
+            }
+            getdemandZero(demandZero);
+        }
+
+
+//        sortSiteMaxN(sortSiteMaxSort);
+
+        return tSiteBandWrite;
+    }
+
+    /**
+     * 当前结点应该提供给那些客户使用
+     */
+
+    private static Integer[] provideSite(int M, int provideAver, int t, int j, String siteName,List<HashMap<String, Integer>> bandWidthListMap, HashMap<Integer, Integer> demandNeed) {
+        Integer[] one = new Integer[]{t, j, 0, 0};//[时刻，边缘结点， jsum, demandNode]
+        int jSum = 0;
+        int demandNodeTimes = 0;
+        for (int i = 1; i < M; i++) {
+            String demandName = demand.get(0)[i];
+            int need = Integer.parseInt(demand.get(t)[i]);
+            Integer siteYu = bandWidthListMap.get(t).get(siteName)/provideAver;
+            if (need==0 || siteYu == 0) continue;
+
+            if (MN.get(demandName).contains(siteName)) {
+                if (siteYu >= need) {
+                    jSum += need;
+                    bandWidthListMap.get(t).put(siteName, bandWidthListMap.get(t).get(siteName) - need);
+                    demandNodeTimes++;
+
+                    demand.get(t)[i] = "0";
+
+                    if (demandNeed.containsKey(i)) demandNeed.put(i, demandNeed.get(i)+need);
+                    else demandNeed.put(i, need);
+
+                } else {
+                    jSum += siteYu;
+                    bandWidthListMap.get(t).put(siteName, bandWidthListMap.get(t).get(siteName) - siteYu);
+
+                    demand.get(t)[i] = String.valueOf(Integer.parseInt(demand.get(t)[i]) - siteYu);
+                    demandNodeTimes++;
+
+                    if (demandNeed.containsKey(i)) demandNeed.put(i, demandNeed.get(i)+siteYu);
+                    else demandNeed.put(i, siteYu);
+                }
+            }
+        }
+        //如果还未满载则再次分配，这里就可以直接一下全部给完老
+        if (bandWidthListMap.get(t).get(siteName)!=0){
+            for (int i = 1; i < M; i++) {
+                String demandName = demand.get(0)[i];
+                int need = Integer.parseInt(demand.get(t)[i]);
+                Integer siteYu = bandWidthListMap.get(t).get(siteName);
+                if (need==0 || siteYu == 0) continue;
+
+                if (MN.get(demandName).contains(siteName)) {
+                    if (siteYu >= need) {
+                        jSum += need;
+                        bandWidthListMap.get(t).put(siteName, siteYu - need);
+
+                        demand.get(t)[i] = "0";
+
+                        if (demandNeed.containsKey(i)) demandNeed.put(i, demandNeed.get(i)+need);
+                        else demandNeed.put(i, need);
+                    } else {
+                        jSum += siteYu;
+                        bandWidthListMap.get(t).put(siteName, 0);
+
+                        demand.get(t)[i] = String.valueOf(Integer.parseInt(demand.get(t)[i]) - siteYu);
+
+                        if (demandNeed.containsKey(i)) demandNeed.put(i, demandNeed.get(i)+siteYu);
+                        else demandNeed.put(i, siteYu);
+                    }
+                }
+            }
+        }
+        //补充所有的demand
+        Iterator iter = demandNeed.keySet().iterator();
+        while (iter.hasNext()) {
+            Integer demandNameIndex = (Integer) iter.next();
+            Integer den = demandNeed.get(demandNameIndex);
+            demand.get(t)[demandNameIndex] = String.valueOf(Integer.parseInt(demand.get(t)[demandNameIndex]) + den);
+        }
+
+
+        one[2] = jSum;
+        one[3] = demandNodeTimes;
+
+        return one;
+    }
+
+
+
+    /**
+     * 添加到demand写入文件中
+     */
+    public static void changeDemand(int t, String siteName ,int value, HashMap<Integer, HashMap<String, HashMap<String, Integer>>>  tSiteBandWrite, HashMap<Integer, Integer> demandNeed){
+
+        HashMap<String, HashMap<String, Integer>> mSiteNand;
+        if (tSiteBandWrite.containsKey(t)) mSiteNand = tSiteBandWrite.get(t);
+        else mSiteNand = new HashMap<>();
+
+        Iterator iter = demandNeed.keySet().iterator();
+
+        while (iter.hasNext()) {
+            Integer demandNameIndex = (Integer) iter.next();
+            Integer den = demandNeed.get(demandNameIndex);
+
+            String demandName = demand.get(0)[demandNameIndex];
+
+            demand.get(t)[demandNameIndex] = String.valueOf(Integer.parseInt(demand.get(t)[demandNameIndex]) - den);
+
+            HashMap<String, Integer> hashMap;
+            if (mSiteNand.containsKey(demandName)) hashMap = mSiteNand.get(demandName);
+            else hashMap = new HashMap<>();
+
+            hashMap.put(siteName, den);
+            mSiteNand.put(demandName, hashMap);
+            value -= den;
+        }
+        if (value!=0) System.out.println("出错了"+t+" "+siteName);
+
+        tSiteBandWrite.put(t, mSiteNand);
+    }
+
+
+    //记录那些时刻的demand全为0
+    public static void getdemandZero(HashSet<Integer> demandZero){
+        for (int t=1; t<demand.size(); t++){
+            if (demandZero.contains(t))continue;
+            for (int i=1; i<demand.get(0).length; i++){
+                String s = demand.get(t)[i];
+                if (!s.equals("0")) break;
+                if (i==demand.get(0).length-1) demandZero.add(t);
+            }
+        }
+    }
+
+
+    //排序
+    public static void sortSiteMaxN(List<Integer[]> sortSiteMaxSort){
+
+        Collections.sort(sortSiteMaxSort, new Comparator<Integer[]>() {
+            @Override
+            public int compare(Integer[] integers, Integer[] t1) {
+
+                //使用的结点排序
+                int demandNode = t1[3] - integers[3];
+                if (demandNode==0) demandNode = t1[2] - integers[2];
+
+                return demandNode;
+            }
+        });
+    }
+
+    public static HashMap<String, Integer> getSiteHasBandWidthMap() {
+        return siteHasBandWidthMap;
+    }
+
+    public static List<String[]> getDemand() {
+        return demand;
+    }
+}
