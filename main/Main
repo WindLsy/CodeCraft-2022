@@ -1,0 +1,221 @@
+package com.huawei.java.main;
+
+
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.util.*;
+
+public class Main {
+
+//  private final static String outPath = "/output/solution.txt";
+
+	private final static String outPath = "src/java/com/huawei/java/data/solution.txt";
+	private  static List<String[]> demand = AgainProcess.getDemand();//需求矩阵
+	private final static HashMap<String, HashSet<String>> MN = DataProcess.getMN();//每个客户可以使用的边缘结点。（满足Qos）,都从1开始
+	private final static HashMap<String, HashSet<String>> NM = DataProcess.getNM();//每个客户可以使用的边缘结点。（满足Qos）,都从1开始
+
+	private final static HashMap<String, Integer> siteHasBandWidthMap = AgainProcess.getSiteHasBandWidthMap();//边缘结点带宽初值
+
+
+
+
+
+	public static void main(String[] args) throws IOException {
+		//创建文件夹和文件
+		File file = new File(outPath);
+		if (!file.getParentFile().exists()) file.getParentFile().mkdirs();
+		if (!file.exists()) file.createNewFile();
+
+		//写入文件内容
+		BufferedWriter writer = new BufferedWriter(new FileWriter(outPath));
+
+		//执行
+		others(writer);
+		writer.close();
+
+	}
+
+	/**
+     * 因为存在95%的原因，所以在所有时刻T中每一个边缘结点可以有5%T的机会满载。
+	 * 完成绝对满载
+	 * @param writer
+	 */
+	public static void others(BufferedWriter writer){
+
+		//就实际而言应该，再减去-1，但是为了矩阵方便从1开始，数量相同
+		int T = demand.size();
+		int M = demand.get(0).length;
+
+		List<HashMap<String, Integer>> bandWidthListMap = new ArrayList<>();
+		bandWidthListMap.add(new HashMap<>());//占位从1开始索引
+		for (int t=1; t<T; t++) bandWidthListMap.add((HashMap<String, Integer>) siteHasBandWidthMap.clone());
+
+		//先最大化的利用5%T的点
+		HashMap<Integer, HashMap<String, HashMap<String, Integer>>> alreadyTMSiteBandWrite = AgainProcess.demandSiteMaxSort(bandWidthListMap);
+		demand = AgainProcess.getDemand();
+
+		//这里应该尽可能的是的后面95%时刻的值尽可能的相等
+
+
+		for (int t=1; t<T; t++){
+
+			List<Map<String, Integer>> tSiteBandWrite = new ArrayList<>();//每个时刻写入文件带宽需求。
+
+			for (int i=1; i<M; i++){
+				//写文件
+				String demandNamde = demand.get(0)[i];
+				HashMap<String, Integer> mapStrs;
+				if (alreadyTMSiteBandWrite!=null &&  alreadyTMSiteBandWrite.get(t)!=null && alreadyTMSiteBandWrite.get(t).get(demandNamde)!=null) mapStrs = alreadyTMSiteBandWrite.get(t).get(demandNamde);
+				else mapStrs = new HashMap<>();
+				HashSet<String> availableN = MN.get(demandNamde);
+				int D = Integer.parseInt(demand.get(t)[i]);
+				//这一句有问题
+				//还没有找到这一句的问题所在
+//				int an = averageAn(availableN, mapStrs, bandWidthListMap.get(t), D);
+
+//				if (an!=D)
+				int n = availableN.size()- mapStrs.size();
+				if (n!=0){
+					int an = D/ n;
+					D = average(availableN, mapStrs, bandWidthListMap.get(t), D, an);
+				}
+
+				extra(availableN, mapStrs, bandWidthListMap.get(t), D);
+				tSiteBandWrite.add(mapStrs);
+			}
+
+			//写入文件。
+			for (int y=0; y<tSiteBandWrite.size(); y++){
+				writeM(tSiteBandWrite.get(y), t, T, y+1, M, writer);
+			}
+		}
+	}
+
+	/**
+	 * 返回an，没有就返回D
+	 * @return
+	 */
+	private static int averageAn(HashSet<String> availableN, HashMap<String, Integer> mapStrs, HashMap<String, Integer> siteHasBandWidth, int D) {
+		if (D==0) return D;
+
+		int need = D;
+		int ltanValue=0;
+		int gtTimes = 0;
+		int n = availableN.size();
+		if (mapStrs!=null) n -= mapStrs.size();
+		if(n==0) return D;
+
+		int an = D/n;
+		if (an==0) return D;
+
+		while(true) {
+			for (String siteName : availableN) {
+				if (mapStrs.containsKey(siteName)) continue;
+				int siteYu = siteHasBandWidth.get(siteName);
+
+				if (siteYu>= an) {
+					D -= an;
+					gtTimes++;
+				} else {
+					if (siteYu != 0) {
+						D -= siteYu;
+						ltanValue += siteYu;
+					}
+					n--;
+					if (n == 0) break;
+				}
+			}
+			if (gtTimes==0 || D/gtTimes<=1) break;
+			an = (need - ltanValue) / gtTimes;
+			D = need;
+			gtTimes=0;
+			ltanValue=0;
+			n=0;
+		}
+		return an;
+	}
+
+	/**
+	 *在绝对满载的基础上剩下的平均。
+	 */
+	private static int average(HashSet<String> availableN, HashMap<String, Integer> mapStrs, HashMap<String, Integer> siteHasBandWidth, int D, int an) {
+		if (D==0 || an==0) return D;
+
+
+		for (String siteName : availableN){
+
+			if (mapStrs.containsKey(siteName)) continue;
+			int siteYu = siteHasBandWidth.get(siteName);
+
+			if (siteYu>=an){
+				if (mapStrs.containsKey(siteName)) mapStrs.put(siteName, mapStrs.get(siteName)+an);
+				else mapStrs.put(siteName, an);
+				siteHasBandWidth.put(siteName, siteYu-an);
+				D -= an;
+
+			}else {
+				if (siteYu!=0){
+					if (mapStrs.containsKey(siteName)) mapStrs.put(siteName, mapStrs.get(siteName)+siteYu);
+					else mapStrs.put(siteName, siteYu);
+					siteHasBandWidth.put(siteName, 0);
+					D -= siteYu;
+				}
+			}
+		}
+
+		return D;
+
+	}
+
+	/**
+	 * 分配最后的余量
+	 */
+	private static void extra(HashSet<String> availableN, HashMap<String, Integer> mapStrs, HashMap<String, Integer> siteHasBandWidth,int yu) {
+		if (yu==0) return;
+		for (String siteName : availableN){
+
+			int siteYu = siteHasBandWidth.get(siteName);
+
+			if(siteYu>=yu){
+				if (mapStrs.containsKey(siteName)) mapStrs.put(siteName, mapStrs.get(siteName)+yu);
+				else mapStrs.put(siteName, yu);
+
+				siteHasBandWidth.put(siteName, siteYu-yu);
+				yu = 0;
+			}else {
+				if (siteYu==0) continue;
+				if (mapStrs.containsKey(siteName)) mapStrs.put(siteName, mapStrs.get(siteName)+siteYu);
+				else mapStrs.put(siteName, siteYu);
+
+				siteHasBandWidth.put(siteName, 0);
+				yu -= siteYu;
+			}
+			if (yu==0) return;
+		}
+	}
+
+
+	/**
+	 * 写入数据
+	 * @param writer
+	 */
+	public static void writeM(Map<String, Integer> mapStrs, int t, int T, int i, int M, BufferedWriter writer){
+		StringBuffer stringBuffer = new StringBuffer();
+		Iterator iter = mapStrs.keySet().iterator();
+
+		stringBuffer.append(demand.get(0)[i]+":");
+		int strsn = 0;
+		while (iter.hasNext()) {
+			String key = String.valueOf(iter.next());
+			int value = mapStrs.get(key);
+
+			if (strsn==mapStrs.size()-1) stringBuffer.append("<"+key+","+value+">");
+			else stringBuffer.append("<"+key+","+value+">,");
+			strsn++;
+		}
+		if (t==T-1 && i==M-1) FileProcess.writeFile(writer, stringBuffer.toString(), 0);
+		else FileProcess.writeFile(writer, stringBuffer.toString(), 1);
+	}
+}
